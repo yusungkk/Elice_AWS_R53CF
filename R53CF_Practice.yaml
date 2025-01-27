@@ -1,0 +1,122 @@
+Parameters:
+  LatestAmiId:
+    Description: (DO NOT CHANGE)
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    AllowedValues:
+      - /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Resources:
+  SPVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+     CidrBlock: 10.0.0.0/16
+     EnableDnsHostnames: true
+     Tags:
+        - Key: Name
+          Value: SP-VPC
+
+  SPIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: SP-IGW
+
+  SPIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref SPIGW
+      VpcId: !Ref SPVPC
+
+  SPPublicRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SPVPC
+      Tags:
+        - Key: Name
+          Value: SP-Public-RT
+
+  SPDefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: SPIGWAttachment
+    Properties:
+      RouteTableId: !Ref SPPublicRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SPIGW
+
+  SPPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SPVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.0.0.0/24
+      Tags:
+        - Key: Name
+          Value: SP-Public-Subnet-1
+
+  SPPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SPPublicRT
+      SubnetId: !Ref SPPublicSubnet1
+
+  SPSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      VpcId: !Ref SPVPC
+      Tags:
+        - Key: Name
+          Value: SP-SecurityGroup-1
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+
+  SPEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      Tags:
+        - Key: Name
+          Value: SP-EC2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref SPPublicSubnet1
+          GroupSet:
+          - !Ref SPSecurityGroup
+          AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            (
+            echo "test1234"
+            echo "test1234"
+            ) | passwd --stdin root
+            sed -i "s/^PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config
+            sed -i "s/^#PermitRootLogin yes/PermitRootLogin yes/g" /etc/ssh/sshd_config
+            systemctl restart sshd
+            hostnamectl --static set-hostname SP-EC2
+            yum -y install httpd php tree git
+            git clone ###여기에 원격저장소 URL입력###
+            mv ./###여기에 원격저장소 이름 입력###/Elice_Image.png /var/www/html/Elice_Image.png
+            mv ./###여기에 원격저장소 이름 입력###/index.php /var/www/html/index.php
+            systemctl start httpd && systemctl enable httpd  
+            sed -i "s/UTC/Asia\/Seoul/g" /etc/sysconfig/clock
+            ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime
+
+Outputs:
+  SPEC2:
+    Value: !GetAtt SPEC2.PublicIp
+
+# 109 : 원격 저장소 URL을 입력하세요 (예 : git clone https://github.com/hana/Elice_AWS_R53CF.git)
+# 110 : 원격 저장소 이름을 입력하세요 (예 : mv ./Elice_AWS_R53CF/Elice_Image.png /var/www/html/Elice_Image.png)
+# 111 : 원격 저장소 이름을 입력하세요 (예 : mv ./Elice_AWS_R53CF/index.php /var/www/html/index.php)
