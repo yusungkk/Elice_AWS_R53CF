@@ -106,9 +106,9 @@ Resources:
             systemctl restart sshd
             hostnamectl --static set-hostname SP-EC2
             yum -y install httpd php tree git
-            git clone ###여기에 원격저장소 URL입력###
-            mv ./###여기에 원격저장소 이름 입력###/Elice_Image.png /var/www/html/Elice_Image.png
-            mv ./###여기에 원격저장소 이름 입력###/index.php /var/www/html/index.php
+            git clone https://github.com/yusungkk/Elice_AWS_R53CF.git
+            mv ./Elice_AWS_R53CF/Elice_Image.png /var/www/html/Elice_Image.png
+            mv ./Elice_AWS_R53CF/index.php /var/www/html/index.php
             systemctl start httpd && systemctl enable httpd  
             sed -i "s/UTC/Asia\/Seoul/g" /etc/sysconfig/clock
             ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime
